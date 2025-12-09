@@ -24,7 +24,7 @@
             height: 100%;
             max-width: 480px;
             max-height: 800px;
-            background: linear-gradient(to bottom, #e0f7fa, #fff8e1);
+            background: linear-gradient(to bottom, #b3e5fc, #fff9c4); /* 冰雪到暖阳的渐变 */
             box-shadow: 0 0 30px rgba(0,0,0,0.5);
             overflow: hidden;
         }
@@ -58,7 +58,6 @@
         
         h2 { margin: 0; color: #d35400; font-size: 32px; text-shadow: 2px 2px #f1c40f; }
         
-        /* 版本号样式 */
         .version-text {
             color: #7f8c8d;
             font-size: 14px;
@@ -111,8 +110,8 @@
             flex-direction: column;
             align-items: flex-start;
         }
-        #comboText { color: #e74c3c; font-size: 20px; font-weight: 900; font-style: italic; display: none; }
-        #multiplierText { color: #f39c12; font-size: 14px; font-weight: bold; }
+        #comboText { color: #e74c3c; font-size: 22px; font-weight: 900; font-style: italic; display: none; text-shadow: 1px 1px 0 #fff; }
+        #multiplierText { color: #f39c12; font-size: 14px; font-weight: bold; margin-top: 2px; text-shadow: 1px 1px 0 #fff; }
 
         #gameOverScreen {
             display: none;
@@ -167,7 +166,7 @@
 
         <div id="startScreen" class="ui-layer">
             <h2>🐱 大猫猫的奇妙冒险</h2>
-            <div class="version-text">冰雪试炼 Ver1.1.12092501</div>
+            <div class="version-text">冰雪试炼 Ver1.1.12092502</div>
             
             <input type="text" id="nicknameInput" placeholder="请输入你的群昵称" maxlength="8">
             <button onclick="startGame()">出击！</button>
@@ -178,7 +177,7 @@
             <div id="scoreText">0 <span id="scoreLabel">猫币</span></div>
             <div id="comboBox">
                 <div id="comboText">COMBO x2!</div>
-                <div id="multiplierText">当前收益: +100%</div>
+                <div id="multiplierText">时间流速: 1.0x</div>
             </div>
         </div>
 
@@ -227,18 +226,18 @@
         controlHint.innerHTML = "💻 A / D 移动 (注意：左右有墙)";
     }
 
-    // --- 动态难度参数 ---
+    // --- 核心参数 ---
+    // 我们定义一套“月球重力”作为基准
+    // 然后通过 timeScale 来进行全局加速
     const BASE_GRAVITY = 0.15; 
-    const MAX_GRAVITY = 0.35; 
-    let currentGravity = BASE_GRAVITY;
-    let difficultyLevel = 0; 
-
     const PLAYER_JUMP_FORCE = -8.5; 
+    const BASE_MOVE_SPEED = 6.0;
     
+    // 弹幕库
     const DANMAKU_TEXTS = [
         "会不会玩，你个铸币喵", "要寄了喵要寄了喵", "群友可比你厉害多了喵",
         "你个弱者为何要战斗喵", "大猫猫在看着你喵", "这就想放弃了喵？",
-        "小心头顶喵！", "注意脚下喵！"
+        "好菜啊喵~", "注意脚下喵！"
     ];
 
     let isPlaying = false;
@@ -252,9 +251,12 @@
 
     let player = { x: 0, y: 0, width: 36, height: 36, dx: 0, dy: 0, speed: 0 };
     
+    // 游戏状态变量
     let displayScore = 0;
+    let rawHeight = 0; // 物理高度
     let comboCount = 0;
     let lastPlatformId = -1; 
+    let timeScale = 1.0; // 【核心】时间流速倍率
 
     const TYPE_NORMAL = 0;
     const TYPE_MOVING = 1;
@@ -263,55 +265,67 @@
     class Icicle {
         constructor() {
             this.x = 20 + Math.random() * (canvas.width - 40);
-            this.y = 0; 
-            this.width = 20;
+            this.y = 50; // 初始位置
+            this.width = 24;
             this.height = 40;
-            this.state = 'forming'; 
+            this.state = 'warning'; // warning -> falling
             this.timer = 0;
-            this.formTime = 90; 
+            this.warningTime = 80; // 警告持续帧数
             this.speed = 0;
-            this.maxSpeed = 3 + difficultyLevel * 4; 
         }
 
         update() {
-            if (this.state === 'forming') {
-                this.timer++;
-                if (this.timer % 10 < 5) this.x += 1; else this.x -= 1;
+            if (this.state === 'warning') {
+                this.timer += 1 * timeScale; // 警告时间也随流速变快
                 
-                if (this.timer >= this.formTime) {
+                // 抖动效果
+                if (Math.floor(this.timer) % 10 < 5) this.x += 1; else this.x -= 1;
+                
+                if (this.timer >= this.warningTime) {
                     this.state = 'falling';
                 }
             } else {
-                this.speed += 0.2; 
-                if(this.speed > this.maxSpeed) this.speed = this.maxSpeed;
-                this.y += this.speed;
+                // 下落逻辑：物理加速
+                this.speed += 0.3 * timeScale;
+                this.y += this.speed * timeScale;
             }
         }
 
         draw() {
-            ctx.fillStyle = '#81d4fa'; 
-            
-            if (this.state === 'forming') {
-                ctx.globalAlpha = (this.timer / this.formTime); 
-                ctx.beginPath();
-                ctx.moveTo(this.x, this.y);
-                ctx.lineTo(this.x + this.width/2, this.y + this.height/2); 
-                ctx.lineTo(this.x - this.width/2, this.y + this.height/2);
-                ctx.fill();
-                
+            if (this.state === 'warning') {
+                // 警告图标：蓝色感叹号
+                ctx.save();
+                ctx.globalAlpha = 0.6 + Math.sin(this.timer * 0.5) * 0.4; // 闪烁
                 ctx.fillStyle = '#e74c3c';
-                ctx.font = "bold 20px Arial";
-                ctx.fillText("!", this.x - 5, this.y + 40);
+                ctx.font = "bold 28px Arial";
+                ctx.fillText("!", this.x - 7, this.y + 30);
                 
-            } else {
-                ctx.globalAlpha = 1.0;
+                // 冰锥虚影
+                ctx.fillStyle = '#81d4fa';
+                ctx.globalAlpha = 0.3;
                 ctx.beginPath();
                 ctx.moveTo(this.x, this.y + this.height); 
                 ctx.lineTo(this.x + this.width/2, this.y);
                 ctx.lineTo(this.x - this.width/2, this.y);
                 ctx.fill();
+                ctx.restore();
+            } else {
+                // 实体冰锥
+                ctx.fillStyle = '#29b6f6';
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y + this.height); // 尖端向下
+                ctx.lineTo(this.x + this.width/2, this.y);
+                ctx.lineTo(this.x - this.width/2, this.y);
+                ctx.fill();
+                
+                // 高光
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.moveTo(this.x - 2, this.y + this.height - 10);
+                ctx.lineTo(this.x + 3, this.y + 5);
+                ctx.lineTo(this.x - 3, this.y + 5);
+                ctx.fill();
             }
-            ctx.globalAlpha = 1.0;
         }
     }
 
@@ -334,9 +348,16 @@
         }
         update() {
             if (this.type === TYPE_MOVING) {
-                this.x += this.speed * this.dir;
-                if (this.x <= 0 || this.x + this.width >= canvas.width) {
-                    this.dir *= -1;
+                // 平台移动速度也受 timeScale 影响
+                this.x += this.speed * this.dir * timeScale;
+                
+                // 空气墙反弹
+                if (this.x <= 0) {
+                    this.x = 0;
+                    this.dir = 1;
+                } else if (this.x + this.width >= canvas.width) {
+                    this.x = canvas.width - this.width;
+                    this.dir = -1;
                 }
             }
         }
@@ -368,10 +389,10 @@
             this.color = color;
         }
         update() {
-            this.x += this.vx;
-            this.y += this.vy;
-            this.vy += 0.1;
-            this.life -= 0.02;
+            this.x += this.vx * timeScale;
+            this.y += this.vy * timeScale;
+            this.vy += 0.1 * timeScale;
+            this.life -= 0.02 * timeScale;
         }
         draw() {
             ctx.globalAlpha = Math.max(0, this.life);
@@ -390,7 +411,7 @@
             this.size = 16 + Math.random() * 8; 
             this.color = `rgba(0, 0, 0, ${0.1 + Math.random() * 0.2})`; 
         }
-        update() { this.x -= this.speed; }
+        update() { this.x -= this.speed * timeScale; }
         draw() {
             ctx.save();
             ctx.font = `bold ${this.size}px "Microsoft YaHei"`;
@@ -448,15 +469,10 @@
         player.speed = canvas.width < 400 ? 5.5 : 7; 
         
         displayScore = 0;
-        // 重置物理高度记录 (关键fix: 分数重置，高度也要重置，否则难度会继承)
-        let rawHeight = 0; 
-        
+        rawHeight = 0;
         comboCount = 0;
         lastPlatformId = -1;
-        
-        // 重置难度
-        currentGravity = BASE_GRAVITY;
-        difficultyLevel = 0;
+        timeScale = 1.0;
         
         updateScoreUI();
         gameOverScreen.style.display = 'none';
@@ -493,7 +509,8 @@
             let type = TYPE_NORMAL;
             let rand = Math.random();
             
-            let breakableProb = 0.1 + difficultyLevel * 0.3; 
+            // 易碎台阶概率随分数增加
+            let breakableProb = 0.1 + (displayScore / 50000) * 0.3; 
             
             if (prevType === TYPE_BREAKABLE) {
                 type = (rand < 0.3) ? TYPE_MOVING : TYPE_NORMAL;
@@ -518,49 +535,53 @@
     function update() {
         if (!isPlaying) return;
 
-        difficultyLevel = Math.min(displayScore / 50000, 1.0);
-        currentGravity = BASE_GRAVITY + difficultyLevel * (MAX_GRAVITY - BASE_GRAVITY);
+        // --- 核心：时间流速控制 (Time Scale) ---
+        // 随着分数增加，时间流速加快，最高 1.5 倍速
+        timeScale = 1.0 + Math.min(displayScore / 80000, 0.5);
 
-        if (keys.right) player.x += player.speed;
-        if (keys.left) player.x -= player.speed;
+        // 玩家移动 (应用 timeScale)
+        if (keys.right) player.x += player.speed * timeScale;
+        if (keys.left) player.x -= player.speed * timeScale;
 
+        // 空气墙限制 (Role cannot jump out)
         if (player.x < 0) player.x = 0;
         if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-        player.dy += currentGravity; 
-        player.y += player.dy;
+        // 物理更新 (关键：速度和加速度都要乘 timeScale)
+        player.dy += BASE_GRAVITY * timeScale; 
+        player.y += player.dy * timeScale;
 
+        // 镜头跟随
         if (player.y < canvas.height / 2) {
             let diff = canvas.height / 2 - player.y;
             player.y = canvas.height / 2;
             
+            // 这里不需要乘 timeScale，因为 player.y 已经变快了，diff 自然就大
             platforms.forEach(p => p.y += diff);
             particles.forEach(p => p.y += diff);
             icicles.forEach(i => i.y += diff); 
             
-            // --- 分数计算核心 ---
-            // 基础系数提升至 1.5
-            let baseScore = diff * 1.5; 
-            
-            // 倍率成长加快 (除以2000而不是2500)
-            scoreMultiplier = 1 + Math.floor(displayScore / 2000) * 0.2;
-            
-            displayScore += baseScore * scoreMultiplier;
+            // 记录得分
+            rawHeight += diff;
+            displayScore += diff * 1.5; // [BUFF] 基础分增加
             updateScoreUI();
         }
 
         generatePlatforms();
         platforms = platforms.filter(p => p.y < canvas.height);
 
-        let icicleChance = 0.002 + difficultyLevel * 0.008;
+        // 冰锥生成
+        // 概率随流速增加
+        let icicleChance = 0.002 * timeScale;
         if (Math.random() < icicleChance) {
             icicles.push(new Icicle());
         }
         icicles.forEach((ice, index) => {
             ice.update();
+            // 冰锥判定：稍微缩小碰撞箱
             if (ice.state === 'falling' &&
-                player.x < ice.x + ice.width/2 &&
-                player.x + player.width > ice.x - ice.width/2 &&
+                player.x + 5 < ice.x + ice.width/2 &&
+                player.x + player.width - 5 > ice.x - ice.width/2 &&
                 player.y < ice.y + ice.height &&
                 player.y + player.height > ice.y
             ) {
@@ -572,23 +593,26 @@
         if (Math.random() < 0.005) danmakus.push(new Danmaku());
         danmakus.forEach((d, i) => { d.update(); if(d.x < -300) danmakus.splice(i, 1); });
 
+        // 平台碰撞
         if (player.dy > 0) { 
             platforms.forEach(p => {
                 if (p.isBroken) return;
+                // 碰撞检测
                 if (player.x + 5 < p.x + p.width && player.x + player.width - 5 > p.x && player.y + player.height > p.y && player.y + player.height < p.y + p.height + 20) {
                     
+                    // 起跳
                     player.dy = PLAYER_JUMP_FORCE; 
                     
+                    // 连跳奖励逻辑
                     if (p.id !== lastPlatformId) {
                         if (p.id > lastPlatformId) {
                             comboCount++;
-                            let bonus = comboCount * 10;
-                            displayScore += (10 + bonus);
-                        } else {
+                            let bonus = comboCount * 20; // [BUFF] 连跳奖励翻倍
+                            displayScore += (20 + bonus);
                         }
                         lastPlatformId = p.id;
                     } else {
-                        comboCount = 0;
+                        comboCount = 0; // 原地跳清零
                     }
                     updateScoreUI();
 
@@ -608,14 +632,15 @@
     function updateScoreUI() {
         scoreEl.innerHTML = Math.floor(displayScore) + ' <span id="scoreLabel">猫币</span>';
         
+        // 显示当前流速作为难度提示
+        multiplierEl.innerText = "时间流速: " + timeScale.toFixed(1) + "x";
+
         if (comboCount >= 2) {
             comboText.style.display = "block";
             comboText.innerText = "连跳 x" + comboCount + "!";
             comboText.style.transform = `scale(${1 + Math.min(comboCount*0.1, 0.5)})`; 
-            multiplierEl.innerText = "额外收益: +" + (comboCount * 10) + "币";
         } else {
             comboText.style.display = "none";
-            multiplierEl.innerText = "收益: 正常";
         }
     }
 
