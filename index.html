@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>大猫猫的奇妙冒险</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: "Microsoft YaHei", sans-serif; /* 用微软雅黑显示中文 */
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 480px;
+            max-height: 800px;
+            background-color: #fff8e1; /* 暖色调背景 */
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* UI Layers */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 20; /* 保证UI在弹幕之上 */
+        }
+
+        /* Start Screen */
+        #startScreen {
+            background: rgba(255, 255, 255, 0.98);
+            pointer-events: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        h2 { margin: 0 0 10px; color: #d35400; font-size: 32px; text-shadow: 2px 2px #f1c40f; }
+        
+        input {
+            padding: 12px;
+            font-size: 18px;
+            border: 2px solid #e67e22;
+            border-radius: 8px;
+            margin: 15px 0;
+            width: 80%;
+            text-align: center;
+            outline: none;
+        }
+        
+        button {
+            padding: 12px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            background-color: #e67e22;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(230, 126, 34, 0.3);
+            transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.95); }
+
+        /* HUD */
+        #hudLayer {
+            justify-content: flex-start;
+            align-items: flex-start;
+            padding: 15px;
+            height: auto;
+        }
+        #scoreText { color: #d35400; font-size: 24px; font-weight: 800; text-shadow: 1px 1px #fff; }
+        #scoreLabel { font-size: 14px; color: #e67e22; font-weight: normal;}
+        #multiplierText { color: #f39c12; font-size: 14px; font-weight: bold; margin-top: 2px; }
+
+        /* Game Over Screen */
+        #gameOverScreen {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            pointer-events: auto;
+            animation: fadeIn 0.3s;
+            padding: 20px;
+            width: 85%;
+            border-radius: 15px;
+            border: 3px solid #e67e22;
+        }
+        
+        @keyframes fadeIn { from { opacity:0; transform: scale(0.9); } to { opacity:1; transform: scale(1); } }
+
+        .eval-text { 
+            color: #c0392b; 
+            font-size: 18px; 
+            font-weight: bold; 
+            margin: 15px 0; 
+            padding: 10px;
+            background: #fdebd0;
+            border-radius: 8px;
+            line-height: 1.4;
+        }
+        .big-score { font-size: 42px; color: #d35400; font-weight: 900; margin: 5px 0; }
+        .new-record { color: #f1c40f; font-weight: bold; font-size: 18px; display:none; text-shadow: 0 1px 1px rgba(0,0,0,0.2); }
+
+        /* Hints */
+        #controlHint {
+            position: absolute;
+            bottom: 30px;
+            background: rgba(0,0,0,0.05);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #7f8c8d;
+            pointer-events: none;
+        }
+        
+        /* Invisible Touch Zones */
+        .touch-zone { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 5; }
+        #leftZone { left: 0; }
+        #rightZone { right: 0; }
+    </style>
+</head>
+<body>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="leftZone" class="touch-zone"></div>
+        <div id="rightZone" class="touch-zone"></div>
+
+        <div id="startScreen" class="ui-layer">
+            <h2>🐱 大猫猫的奇妙冒险</h2>
+            <p style="color:#7f8c8d; margin-bottom:20px">是勇者就上一百层喵！</p>
+            <input type="text" id="nicknameInput" placeholder="请输入你的群昵称" maxlength="8">
+            <button onclick="startGame()">出击！</button>
+            <div id="controlHint" style="bottom: 80px">正在识别设备喵...</div>
+        </div>
+
+        <div id="hudLayer" class="ui-layer" style="display:none;">
+            <div id="scoreText">0 <span id="scoreLabel">猫币</span></div>
+            <div id="multiplierText">x1.0 倍率</div>
+        </div>
+
+        <div id="gameOverScreen" class="ui-layer">
+            <div class="new-record" id="newRecordLabel">🏆 打破纪录喵! 🏆</div>
+            <h2 style="margin:0; color:#2c3e50; font-size: 24px;">结算面板</h2>
+            <div class="big-score" id="goScore">0</div>
+            <div style="color:#e67e22; font-size:14px;">猫币</div>
+            
+            <div id="catComment" class="eval-text">
+                评价加载中...
+            </div>
+            
+            <div class="stat-row" style="font-size:14px; color:#95a5a6; margin-top:5px">
+                挑战者: <span id="goName">---</span> | 历史最高: <span id="goHighScore">0</span>
+            </div>
+            
+            <button onclick="resetGame()" style="margin-top:20px; background:#27ae60; width:70%">不服再战 (R)</button>
+        </div>
+    </div>
+
+<script>
+    // --- Core Init ---
+    const container = document.getElementById('gameContainer');
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    function resizeCanvas() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas(); 
+
+    // UI Elements
+    const startScreen = document.getElementById('startScreen');
+    const hudLayer = document.getElementById('hudLayer');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const scoreEl = document.getElementById('scoreText');
+    const multiplierEl = document.getElementById('multiplierText');
+    const controlHint = document.getElementById('controlHint');
+    const catComment = document.getElementById('catComment');
+    
+    // Device Detection
+    const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    if (isMobile) {
+        controlHint.innerHTML = "👈 按住左边 &nbsp;&nbsp; 按住右边 👉";
+    } else {
+        controlHint.innerHTML = "💻 使用 A / D 或 ← / → 移动喵";
+    }
+
+    // --- Game Parameters ---
+    const GRAVITY = 0.15; 
+    const PLAYER_JUMP_FORCE = -8.5; 
+    
+    // 弹幕库
+    const DANMAKU_TEXTS = [
+        "会不会玩，你个铸币喵",
+        "要寄了喵要寄了喵",
+        "群友可比你厉害多了喵",
+        "你个弱者为何要战斗喵",
+        "大猫猫在看着你喵",
+        "这就想放弃了喵？",
+        "好菜啊喵~",
+        "注意脚下喵！"
+    ];
+
+    // State
+    let isPlaying = false;
+    let nickname = "铲屎官";
+    let platforms = [];
+    let particles = []; 
+    let danmakus = []; // 弹幕数组
+    let keys = { right: false, left: false };
+    
+    // 这里的宽度 height 设为猫猫的大小
+    let player = { x: 0, y: 0, width: 36, height: 36, dx: 0, dy: 0, speed: 0 };
+    
+    let rawHeight = 0;
+    let displayScore = 0;
+    let scoreMultiplier = 1.0;
+
+    // Platform Types
+    const TYPE_NORMAL = 0;
+    const TYPE_MOVING = 1;
+    const TYPE_BREAKABLE = 2;
+
+    class Platform {
+        constructor(x, y, type) {
+            this.x = x;
+            this.y = y;
+            this.width = canvas.width < 400 ? 60 : 70; 
+            this.height = 15;
+            this.type = type;
+            this.isBroken = false; 
+
+            if (this.type === TYPE_NORMAL) {
+                this.color = '#27ae60'; 
+            } else if (this.type === TYPE_MOVING) {
+                this.color = '#2980b9'; 
+                this.speed = 1.5 + Math.random(); 
+                this.dir = Math.random() < 0.5 ? 1 : -1; 
+            } else if (this.type === TYPE_BREAKABLE) {
+                this.color = '#d35400'; 
+            }
+        }
+
+        update() {
+            if (this.type === TYPE_MOVING) {
+                this.x += this.speed * this.dir;
+                if (this.x <= 0 || this.x + this.width >= canvas.width) {
+                    this.dir *= -1;
+                }
+            }
+        }
+
+        draw() {
+            if (this.isBroken) return; 
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctx.strokeRect(this.x, this.y, this.width, this.height);
+
+            if (this.type === TYPE_BREAKABLE) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#e67e22';
+                ctx.moveTo(this.x + 10, this.y);
+                ctx.lineTo(this.x + this.width/2, this.y + 12);
+                ctx.lineTo(this.x + this.width - 10, this.y);
+                ctx.stroke();
+            }
+        }
+    }
+
+    class Particle {
+        constructor(x, y, color) {
+            this.x = x;
+            this.y = y;
+            this.vx = (Math.random() - 0.5) * 6;
+            this.vy = (Math.random() - 0.5) * 6;
+            this.life = 1.0;
+            this.color = color;
+        }
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += 0.1;
+            this.life -= 0.02;
+        }
+        draw() {
+            ctx.globalAlpha = Math.max(0, this.life);
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, 6, 6);
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    // --- 弹幕类 ---
+    class Danmaku {
+        constructor() {
+            this.text = DANMAKU_TEXTS[Math.floor(Math.random() * DANMAKU_TEXTS.length)];
+            this.x = canvas.width; // 从右边出来
+            // 随机高度，尽量避开中间玩家可能存在的主要区域，或者全屏随机
+            // 为了“不遮挡台阶”，我们让它颜色浅一点，并且随机分布
+            this.y = 50 + Math.random() * (canvas.height - 200); 
+            this.speed = 1 + Math.random() * 1.5; // 缓慢滚动
+            this.size = 16 + Math.random() * 8; // 字体不要太大
+            this.color = `rgba(0, 0, 0, ${0.1 + Math.random() * 0.2})`; // 非常淡的黑色
+        }
+        
+        update() {
+            this.x -= this.speed;
+        }
+        
+        draw() {
+            ctx.save();
+            ctx.font = `bold ${this.size}px "Microsoft YaHei"`;
+            ctx.fillStyle = this.color;
+            ctx.fillText(this.text, this.x, this.y);
+            ctx.restore();
+        }
+    }
+
+    // --- Inputs ---
+    document.addEventListener('keydown', (e) => {
+        if (!isPlaying) return;
+        if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.right = true;
+        if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.left = true;
+        if (e.code === 'KeyR' && !isPlaying) resetGame();
+    });
+    document.addEventListener('keyup', (e) => {
+        if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.right = false;
+        if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.left = false;
+    });
+
+    const leftZone = document.getElementById('leftZone');
+    const rightZone = document.getElementById('rightZone');
+    leftZone.addEventListener('touchstart', (e) => { e.preventDefault(); keys.left = true; }, {passive: false});
+    leftZone.addEventListener('touchend', (e) => { e.preventDefault(); keys.left = false; }, {passive: false});
+    rightZone.addEventListener('touchstart', (e) => { e.preventDefault(); keys.right = true; }, {passive: false});
+    rightZone.addEventListener('touchend', (e) => { e.preventDefault(); keys.right = false; }, {passive: false});
+
+
+    // --- Logic ---
+
+    function startGame() {
+        const inputName = document.getElementById('nicknameInput').value.trim();
+        if(!inputName) {
+            alert("快输入昵称喵！别想蒙混过关！");
+            return;
+        }
+        nickname = inputName;
+        startScreen.style.display = 'none';
+        hudLayer.style.display = 'flex';
+        isPlaying = true;
+        initGameWorld();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function initGameWorld() {
+        resizeCanvas(); 
+        platforms = [];
+        particles = [];
+        danmakus = [];
+        
+        player.x = canvas.width / 2 - 15;
+        player.y = canvas.height - 200;
+        player.dy = 0;
+        player.speed = canvas.width < 400 ? 5.5 : 7; 
+        
+        rawHeight = 0;
+        displayScore = 0;
+        scoreMultiplier = 1.0;
+        
+        updateScoreUI();
+        gameOverScreen.style.display = 'none';
+
+        platforms.push(new Platform(player.x - 20, player.y + 50, TYPE_NORMAL));
+        generatePlatforms();
+    }
+
+    function generatePlatforms() {
+        let highestY = canvas.height;
+        let prevX = canvas.width / 2;
+        let prevType = TYPE_NORMAL;
+
+        if (platforms.length > 0) {
+            let lastP = platforms[platforms.length - 1];
+            highestY = lastP.y;
+            prevX = lastP.x;
+            prevType = lastP.type;
+        }
+
+        while (highestY > -100) {
+            let gap = 60 + Math.random() * 80; 
+            let y = highestY - gap;
+            let maxJumpDistance = canvas.width * 0.6; 
+            let minX = prevX - maxJumpDistance;
+            let maxX = prevX + maxJumpDistance;
+            let x = minX + Math.random() * (maxX - minX);
+
+            if (x > canvas.width - 60) x -= canvas.width;
+            if (x < 0) x += canvas.width;
+            if (x < 0) x = 0;
+            if (x > canvas.width - 70) x = canvas.width - 70;
+
+            let type = TYPE_NORMAL;
+            let rand = Math.random();
+
+            if (prevType === TYPE_BREAKABLE) {
+                type = (rand < 0.3) ? TYPE_MOVING : TYPE_NORMAL;
+            } else {
+                let difficulty = Math.min(rawHeight / 15000, 0.45); 
+                if (rand < difficulty) type = TYPE_MOVING;
+                else if (rand < difficulty + 0.15) type = TYPE_BREAKABLE; 
+            }
+
+            platforms.push(new Platform(x, y, type));
+            highestY = y;
+            prevX = x; 
+            prevType = type;
+        }
+    }
+
+    function update() {
+        if (!isPlaying) return;
+
+        if (keys.right) player.x += player.speed;
+        if (keys.left) player.x -= player.speed;
+
+        if (player.x + player.width < 0) player.x = canvas.width;
+        else if (player.x > canvas.width) player.x = -player.width;
+
+        player.dy += GRAVITY;
+        player.y += player.dy;
+
+        // Camera Follow
+        if (player.y < canvas.height / 2) {
+            let diff = canvas.height / 2 - player.y;
+            player.y = canvas.height / 2;
+            
+            platforms.forEach(p => p.y += diff);
+            particles.forEach(p => p.y += diff);
+            
+            // 弹幕不需要跟镜头移动，它们是浮在屏幕上的
+
+            rawHeight += diff;
+            scoreMultiplier = 1 + Math.floor(rawHeight / 2500) * 0.2;
+            displayScore += diff * scoreMultiplier;
+            updateScoreUI();
+        }
+
+        generatePlatforms();
+        platforms = platforms.filter(p => p.y < canvas.height);
+
+        // 弹幕生成与更新
+        if (Math.random() < 0.005) { // 约每3-4秒生成一个
+            danmakus.push(new Danmaku());
+        }
+        danmakus.forEach((d, i) => {
+            d.update();
+            if(d.x < -300) danmakus.splice(i, 1);
+        });
+
+        // Collision
+        if (player.dy > 0) {
+            platforms.forEach(p => {
+                if (p.isBroken) return;
+                if (
+                    player.x + 5 < p.x + p.width &&  
+                    player.x + player.width - 5 > p.x &&
+                    player.y + player.height > p.y &&
+                    player.y + player.height < p.y + p.height + 20 
+                ) {
+                    player.dy = PLAYER_JUMP_FORCE;
+                    if (p.type === TYPE_BREAKABLE) {
+                        p.isBroken = true;
+                        for(let i=0; i<8; i++) {
+                            particles.push(new Particle(p.x + p.width/2, p.y, p.color));
+                        }
+                    }
+                }
+            });
+        }
+
+        platforms.forEach(p => p.update());
+        particles.forEach((p, index) => {
+            p.update();
+            if(p.life <= 0) particles.splice(index, 1);
+        });
+
+        if (player.y > canvas.height) {
+            triggerGameOver();
+        }
+    }
+
+    function updateScoreUI() {
+        scoreEl.innerHTML = Math.floor(displayScore) + ' <span id="scoreLabel">猫币</span>';
+        multiplierEl.innerText = "x" + scoreMultiplier.toFixed(1) + " 倍率";
+    }
+
+    function triggerGameOver() {
+        isPlaying = false;
+        
+        let finalScore = Math.floor(displayScore);
+        let highScore = localStorage.getItem('doodle_jump_high_score') || 0;
+        
+        document.getElementById('goName').innerText = nickname;
+        document.getElementById('goScore').innerText = finalScore;
+        
+        // --- 评价系统 ---
+        let comment = "";
+        if (finalScore < 1000) {
+            comment = "弱爆了喵，你是残疾人喵？👎";
+        } else if (finalScore <= 3000) {
+            comment = "蛙趣你到底会不会玩？🤔";
+        } else if (finalScore <= 5000) {
+            comment = "就只有这种程度吗kuso...😕";
+        } else if (finalScore <= 10000) {
+            comment = "也就那样吧，大猫猫比你强不少喵 😏";
+        } else {
+            comment = "无敌了喵无敌了喵！\n但大猫猫觉得你还有进步空间喵 👑";
+        }
+        catComment.innerText = comment;
+        // ----------------
+        
+        const newRecordLabel = document.getElementById('newRecordLabel');
+        
+        if (finalScore > highScore) {
+            localStorage.setItem('doodle_jump_high_score', finalScore);
+            document.getElementById('goHighScore').innerText = finalScore;
+            newRecordLabel.style.display = 'block';
+        } else {
+            document.getElementById('goHighScore').innerText = highScore;
+            newRecordLabel.style.display = 'none';
+        }
+        
+        hudLayer.style.display = 'none';
+        gameOverScreen.style.display = 'block';
+    }
+
+    function resetGame() {
+        initGameWorld();
+        isPlaying = true;
+        requestAnimationFrame(gameLoop);
+    }
+
+    // --- 绘制猫猫 ---
+    function drawCat(x, y, w, h) {
+        ctx.fillStyle = '#f39c12'; // 橘猫
+        
+        // 身体 (圆角矩形)
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, 8);
+        ctx.fill();
+        
+        // 耳朵 (三角形)
+        ctx.beginPath();
+        ctx.moveTo(x + 2, y + 5);
+        ctx.lineTo(x - 2, y - 8); // 左耳尖
+        ctx.lineTo(x + 12, y);
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(x + w - 2, y + 5);
+        ctx.lineTo(x + w + 2, y - 8); // 右耳尖
+        ctx.lineTo(x + w - 12, y);
+        ctx.fill();
+
+        // 脸
+        ctx.fillStyle = '#fff';
+        // 左眼白
+        ctx.beginPath(); ctx.arc(x + 10, y + 12, 5, 0, Math.PI*2); ctx.fill();
+        // 右眼白
+        ctx.beginPath(); ctx.arc(x + w - 10, y + 12, 5, 0, Math.PI*2); ctx.fill();
+        
+        // 眼珠 (随移动方向看)
+        ctx.fillStyle = '#000';
+        let lookOffset = keys.right ? 2 : (keys.left ? -2 : 0);
+        ctx.beginPath(); ctx.arc(x + 10 + lookOffset, y + 12, 2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + w - 10 + lookOffset, y + 12, 2, 0, Math.PI*2); ctx.fill();
+
+        // 鼻子
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath(); ctx.arc(x + w/2, y + 20, 2, 0, Math.PI*2); ctx.fill();
+
+        // 胡须
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + 2, y + 22); ctx.lineTo(x - 4, y + 20); // 左胡须
+        ctx.moveTo(x + 2, y + 24); ctx.lineTo(x - 4, y + 26);
+        ctx.moveTo(x + w - 2, y + 22); ctx.lineTo(x + w + 4, y + 20); // 右胡须
+        ctx.moveTo(x + w - 2, y + 24); ctx.lineTo(x + w + 4, y + 26);
+        ctx.stroke();
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 先画弹幕 (在背景之上，台阶之下)
+        danmakus.forEach(d => d.draw());
+
+        platforms.forEach(p => p.draw());
+        particles.forEach(p => p.draw());
+
+        // 画猫猫代替画方块
+        drawCat(player.x, player.y, player.width, player.height);
+    }
+
+    function gameLoop() {
+        if(isPlaying) {
+            update();
+            draw();
+        }
+        requestAnimationFrame(gameLoop);
+    }
+
+    ctx.fillStyle = '#fff8e1';
+    ctx.fillRect(0,0, canvas.width, canvas.height);
+
+</script>
+</body>
+</html>
