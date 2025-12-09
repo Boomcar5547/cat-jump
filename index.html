@@ -24,7 +24,7 @@
             height: 100%;
             max-width: 480px;
             max-height: 800px;
-            background: linear-gradient(to bottom, #e0f7fa, #fff8e1); /* 增加一点冰雪氛围的渐变 */
+            background: linear-gradient(to bottom, #e0f7fa, #fff8e1);
             box-shadow: 0 0 30px rgba(0,0,0,0.5);
             overflow: hidden;
         }
@@ -56,7 +56,20 @@
             box-sizing: border-box;
         }
         
-        h2 { margin: 0 0 10px; color: #d35400; font-size: 32px; text-shadow: 2px 2px #f1c40f; }
+        h2 { margin: 0; color: #d35400; font-size: 32px; text-shadow: 2px 2px #f1c40f; }
+        
+        /* 版本号样式 */
+        .version-text {
+            color: #7f8c8d;
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: 5px;
+            margin-bottom: 20px;
+            background: #ecf0f1;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }
         
         input {
             padding: 12px;
@@ -92,7 +105,6 @@
         #scoreText { color: #d35400; font-size: 24px; font-weight: 800; text-shadow: 2px 2px #fff; }
         #scoreLabel { font-size: 14px; color: #e67e22; font-weight: normal;}
         
-        /* Combo 样式 */
         #comboBox {
             margin-top: 5px;
             display: flex;
@@ -101,16 +113,6 @@
         }
         #comboText { color: #e74c3c; font-size: 20px; font-weight: 900; font-style: italic; display: none; }
         #multiplierText { color: #f39c12; font-size: 14px; font-weight: bold; }
-
-        /* 警告框 (冰锥) */
-        #warningLayer {
-            position: absolute;
-            top: 0;
-            width: 100%;
-            height: 50px;
-            pointer-events: none;
-            z-index: 25;
-        }
 
         #gameOverScreen {
             display: none;
@@ -134,7 +136,7 @@
             background: #fdebd0;
             border-radius: 8px;
             line-height: 1.4;
-            white-space: pre-wrap; /* 允许换行 */
+            white-space: pre-wrap; 
         }
         .big-score { font-size: 42px; color: #d35400; font-weight: 900; margin: 5px 0; }
         .new-record { color: #f1c40f; font-weight: bold; font-size: 18px; display:none; text-shadow: 0 1px 1px rgba(0,0,0,0.2); }
@@ -165,7 +167,8 @@
 
         <div id="startScreen" class="ui-layer">
             <h2>🐱 大猫猫的奇妙冒险</h2>
-            <p style="color:#7f8c8d; margin-bottom:20px">小心头顶的落冰喵！</p>
+            <div class="version-text">冰雪试炼 Ver1.1.12092501</div>
+            
             <input type="text" id="nicknameInput" placeholder="请输入你的群昵称" maxlength="8">
             <button onclick="startGame()">出击！</button>
             <div id="controlHint" style="bottom: 80px">正在识别设备喵...</div>
@@ -225,11 +228,10 @@
     }
 
     // --- 动态难度参数 ---
-    // 初始参数 (非常轻盈)
     const BASE_GRAVITY = 0.15; 
-    const MAX_GRAVITY = 0.35; // 难度上限
+    const MAX_GRAVITY = 0.35; 
     let currentGravity = BASE_GRAVITY;
-    let difficultyLevel = 0; // 0.0 ~ 1.0
+    let difficultyLevel = 0; 
 
     const PLAYER_JUMP_FORCE = -8.5; 
     
@@ -244,74 +246,67 @@
     let platforms = [];
     let particles = []; 
     let danmakus = [];
-    let icicles = []; // 冰锥数组
+    let icicles = []; 
     let keys = { right: false, left: false };
     let animationId = null;
 
     let player = { x: 0, y: 0, width: 36, height: 36, dx: 0, dy: 0, speed: 0 };
     
-    // 分数与连击系统
     let displayScore = 0;
     let comboCount = 0;
-    let lastPlatformId = -1; // 记录上一次踩的台阶ID
+    let lastPlatformId = -1; 
 
     const TYPE_NORMAL = 0;
     const TYPE_MOVING = 1;
     const TYPE_BREAKABLE = 2;
 
-    // --- 冰锥系统 ---
     class Icicle {
         constructor() {
             this.x = 20 + Math.random() * (canvas.width - 40);
-            this.y = 0; // 屏幕顶部
+            this.y = 0; 
             this.width = 20;
             this.height = 40;
-            this.state = 'forming'; // forming (凝结) -> falling (掉落)
+            this.state = 'forming'; 
             this.timer = 0;
-            this.formTime = 90; // 凝结时间 (帧数，约1.5秒)
+            this.formTime = 90; 
             this.speed = 0;
-            // 难度越高，下落越快
             this.maxSpeed = 3 + difficultyLevel * 4; 
         }
 
         update() {
             if (this.state === 'forming') {
                 this.timer++;
-                // 凝结时抖动
                 if (this.timer % 10 < 5) this.x += 1; else this.x -= 1;
                 
                 if (this.timer >= this.formTime) {
                     this.state = 'falling';
                 }
             } else {
-                this.speed += 0.2; // 重力加速
+                this.speed += 0.2; 
                 if(this.speed > this.maxSpeed) this.speed = this.maxSpeed;
                 this.y += this.speed;
             }
         }
 
         draw() {
-            ctx.fillStyle = '#81d4fa'; // 冰蓝色
+            ctx.fillStyle = '#81d4fa'; 
             
             if (this.state === 'forming') {
-                // 画一个半透明的警告提示
-                ctx.globalAlpha = (this.timer / this.formTime); // 越来越实
+                ctx.globalAlpha = (this.timer / this.formTime); 
                 ctx.beginPath();
                 ctx.moveTo(this.x, this.y);
-                ctx.lineTo(this.x + this.width/2, this.y + this.height/2); // 小一点
+                ctx.lineTo(this.x + this.width/2, this.y + this.height/2); 
                 ctx.lineTo(this.x - this.width/2, this.y + this.height/2);
                 ctx.fill();
                 
-                // 画感叹号
                 ctx.fillStyle = '#e74c3c';
                 ctx.font = "bold 20px Arial";
                 ctx.fillText("!", this.x - 5, this.y + 40);
                 
             } else {
-                // 掉落实体
                 ctx.globalAlpha = 1.0;
                 ctx.beginPath();
-                ctx.moveTo(this.x, this.y + this.height); // 尖端向下
+                ctx.moveTo(this.x, this.y + this.height); 
                 ctx.lineTo(this.x + this.width/2, this.y);
                 ctx.lineTo(this.x - this.width/2, this.y);
                 ctx.fill();
@@ -322,7 +317,7 @@
 
     class Platform {
         constructor(x, y, type, id) {
-            this.id = id; // 唯一ID用于判断连跳
+            this.id = id; 
             this.x = x;
             this.y = y;
             this.width = canvas.width < 400 ? 60 : 70; 
@@ -340,7 +335,6 @@
         update() {
             if (this.type === TYPE_MOVING) {
                 this.x += this.speed * this.dir;
-                // 碰到墙壁反弹 (空气墙逻辑)
                 if (this.x <= 0 || this.x + this.width >= canvas.width) {
                     this.dir *= -1;
                 }
@@ -454,6 +448,9 @@
         player.speed = canvas.width < 400 ? 5.5 : 7; 
         
         displayScore = 0;
+        // 重置物理高度记录 (关键fix: 分数重置，高度也要重置，否则难度会继承)
+        let rawHeight = 0; 
+        
         comboCount = 0;
         lastPlatformId = -1;
         
@@ -485,21 +482,18 @@
             let gap = 60 + Math.random() * 80; 
             let y = highestY - gap;
             
-            // 限制水平生成范围
             let maxJumpDistance = canvas.width * 0.6; 
             let minX = prevX - maxJumpDistance;
             let maxX = prevX + maxJumpDistance;
             let x = minX + Math.random() * (maxX - minX);
             
-            // 墙壁限制 (不穿墙)
             if (x < 0) x = 0;
             if (x > canvas.width - 70) x = canvas.width - 70;
 
             let type = TYPE_NORMAL;
             let rand = Math.random();
             
-            // 动态难度：分数越高，棕色易碎概率越大
-            let breakableProb = 0.1 + difficultyLevel * 0.3; // 10% -> 40%
+            let breakableProb = 0.1 + difficultyLevel * 0.3; 
             
             if (prevType === TYPE_BREAKABLE) {
                 type = (rand < 0.3) ? TYPE_MOVING : TYPE_NORMAL;
@@ -524,89 +518,79 @@
     function update() {
         if (!isPlaying) return;
 
-        // 1. 动态难度计算
-        // 难度系数随分数线性增长，50000分达到满难度
         difficultyLevel = Math.min(displayScore / 50000, 1.0);
-        // 重力平滑递增
         currentGravity = BASE_GRAVITY + difficultyLevel * (MAX_GRAVITY - BASE_GRAVITY);
 
-        // 2. 玩家移动 (加入空气墙限制)
         if (keys.right) player.x += player.speed;
         if (keys.left) player.x -= player.speed;
 
-        // 空气墙：撞墙停止
         if (player.x < 0) player.x = 0;
         if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-        player.dy += currentGravity; // 使用动态重力
+        player.dy += currentGravity; 
         player.y += player.dy;
 
-        // 3. 镜头跟随
         if (player.y < canvas.height / 2) {
             let diff = canvas.height / 2 - player.y;
             player.y = canvas.height / 2;
             
             platforms.forEach(p => p.y += diff);
             particles.forEach(p => p.y += diff);
-            icicles.forEach(i => i.y += diff); // 冰锥也相对移动
+            icicles.forEach(i => i.y += diff); 
+            
+            // --- 分数计算核心 ---
+            // 基础系数提升至 1.5
+            let baseScore = diff * 1.5; 
+            
+            // 倍率成长加快 (除以2000而不是2500)
+            scoreMultiplier = 1 + Math.floor(displayScore / 2000) * 0.2;
+            
+            displayScore += baseScore * scoreMultiplier;
+            updateScoreUI();
         }
 
         generatePlatforms();
         platforms = platforms.filter(p => p.y < canvas.height);
 
-        // 4. 冰锥生成与逻辑
-        // 难度越高，冰锥生成概率越大 (0.002 -> 0.01)
         let icicleChance = 0.002 + difficultyLevel * 0.008;
         if (Math.random() < icicleChance) {
             icicles.push(new Icicle());
         }
         icicles.forEach((ice, index) => {
             ice.update();
-            // 冰锥击中检测 (稍微缩小判定框)
             if (ice.state === 'falling' &&
                 player.x < ice.x + ice.width/2 &&
                 player.x + player.width > ice.x - ice.width/2 &&
                 player.y < ice.y + ice.height &&
                 player.y + player.height > ice.y
             ) {
-                // 被砸中
                 triggerGameOver("被天降正义了喵！");
             }
-            // 移除屏幕外的
             if (ice.y > canvas.height) icicles.splice(index, 1);
         });
 
-        // 5. 弹幕逻辑
         if (Math.random() < 0.005) danmakus.push(new Danmaku());
         danmakus.forEach((d, i) => { d.update(); if(d.x < -300) danmakus.splice(i, 1); });
 
-        // 6. 平台碰撞逻辑 (Combo系统核心)
         if (player.dy > 0) { 
             platforms.forEach(p => {
                 if (p.isBroken) return;
                 if (player.x + 5 < p.x + p.width && player.x + player.width - 5 > p.x && player.y + player.height > p.y && player.y + player.height < p.y + p.height + 20) {
                     
-                    player.dy = PLAYER_JUMP_FORCE; // 起跳
+                    player.dy = PLAYER_JUMP_FORCE; 
                     
-                    // --- 连击判定 ---
                     if (p.id !== lastPlatformId) {
-                        // 踩到了新台阶 (或不同的台阶)，但为了防止横跳刷分，
-                        // 严格来说应该判断 p.y 是否更高，但在无限卷轴里ID递增即可
                         if (p.id > lastPlatformId) {
                             comboCount++;
-                            // 连跳加分：基础分 + 连击加成
                             let bonus = comboCount * 10;
                             displayScore += (10 + bonus);
                         } else {
-                            // 往下跳了，连击不清零，但没分
                         }
                         lastPlatformId = p.id;
                     } else {
-                        // 原地跳：连击清零！
                         comboCount = 0;
                     }
                     updateScoreUI();
-                    // ---------------
 
                     if (p.type === TYPE_BREAKABLE) {
                         p.isBroken = true;
@@ -627,7 +611,7 @@
         if (comboCount >= 2) {
             comboText.style.display = "block";
             comboText.innerText = "连跳 x" + comboCount + "!";
-            comboText.style.transform = `scale(${1 + Math.min(comboCount*0.1, 0.5)})`; // 连击越多字越大
+            comboText.style.transform = `scale(${1 + Math.min(comboCount*0.1, 0.5)})`; 
             multiplierEl.innerText = "额外收益: +" + (comboCount * 10) + "币";
         } else {
             comboText.style.display = "none";
@@ -644,7 +628,6 @@
         document.getElementById('goName').innerText = nickname;
         document.getElementById('goScore').innerText = finalScore;
         
-        // --- 毒舌评价 2.0 ---
         let comment = "";
         if (finalScore < 2000) comment = "弱爆了喵，你是残疾人喵？👎";
         else if (finalScore <= 10000) comment = "蛙趣你到底会不会玩？🤔";
@@ -652,7 +635,7 @@
         else if (finalScore <= 100000) comment = "也就那样吧，大猫猫比你强不少喵 😏";
         else comment = "无敌了喵无敌了喵！\n但大猫猫觉得你还有进步空间喵 👑";
         
-        if(reason) comment = reason + "\n" + comment; // 加上死亡原因
+        if(reason) comment = reason + "\n" + comment; 
         
         catComment.innerText = comment;
         
@@ -679,10 +662,8 @@
     function drawCat(x, y, w, h) {
         ctx.fillStyle = '#f39c12'; 
         ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
-        // Ears
         ctx.beginPath(); ctx.moveTo(x + 2, y + 5); ctx.lineTo(x - 2, y - 8); ctx.lineTo(x + 12, y); ctx.fill();
         ctx.beginPath(); ctx.moveTo(x + w - 2, y + 5); ctx.lineTo(x + w + 2, y - 8); ctx.lineTo(x + w - 12, y); ctx.fill();
-        // Face
         ctx.fillStyle = '#fff';
         ctx.beginPath(); ctx.arc(x + 10, y + 12, 5, 0, Math.PI*2); ctx.fill();
         ctx.beginPath(); ctx.arc(x + w - 10, y + 12, 5, 0, Math.PI*2); ctx.fill();
@@ -702,7 +683,7 @@
         danmakus.forEach(d => d.draw());
         platforms.forEach(p => p.draw());
         particles.forEach(p => p.draw());
-        icicles.forEach(i => i.draw()); // 画冰锥
+        icicles.forEach(i => i.draw()); 
         drawCat(player.x, player.y, player.width, player.height);
     }
 
@@ -714,7 +695,6 @@
         }
     }
 
-    // 初始背景
     ctx.fillStyle = '#fff8e1';
     ctx.fillRect(0,0, canvas.width, canvas.height);
 
